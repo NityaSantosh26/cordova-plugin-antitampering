@@ -39,7 +39,7 @@
         <source-file src="src/android/com/duddu/antitampering/AssetsIntegrity.java" target-dir="src/com/duddu/antitampering" />
         <source-file src="src/android/com/duddu/antitampering/DebugDetection.java" target-dir="src/com/duddu/antitampering" />
         <source-file src="src/android/com/duddu/antitampering/TamperingException.java" target-dir="src/com/duddu/antitampering" />
-
+        <source-file src="src/android/com/duddu/antitampering/SigningCertificateCheck.java" target-dir="src/com/duddu/antitampering" />
     </platform>
 
     <platform name="ios">

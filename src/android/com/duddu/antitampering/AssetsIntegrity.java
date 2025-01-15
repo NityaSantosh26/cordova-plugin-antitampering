@@ -1,9 +1,13 @@
 package com.duddu.antitampering;
 
+import android.content.Context;
 import android.content.res.AssetManager;
+import android.content.res.Resources;
+import android.content.res.XmlResourceParser;
 import android.util.Base64;
 
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParser;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -40,6 +44,34 @@ class AssetsIntegrity {
         JSONObject result = new JSONObject();
         result.put("count", assetsHashes.size());
         return result;
+    }
+
+    public static void checkForPackageID(Context context) throws Exception {
+        try {
+            String actualPackageName = context.getPackageName();
+            // Access the config.xml file from res/xml
+            Resources res =context.getResources();
+            int configId = res.getIdentifier("config", "xml", actualPackageName);
+
+            if (configId == 0) {
+                throw new Exception("config.xml file not found");
+            }
+
+            // Parse the config.xml file
+            XmlResourceParser parser = res.getXml(configId);
+            while (parser.getEventType() != XmlPullParser.END_DOCUMENT) {
+                if (parser.getEventType() == XmlPullParser.START_TAG && "widget".equals(parser.getName())) {
+                    // Extract the 'id' attribute
+                    String expectedPackageName = parser.getAttributeValue(null, "id");
+                    if(!expectedPackageName.equals(actualPackageName)) {
+                        throw new Exception("Package ID has been tampered, It do not match");
+                    }
+                }
+                parser.next();
+            }
+        } catch (Exception e) {
+            throw new Exception("There seems an issue with Package ID of the app");
+        }
     }
 
     private static String getFileHash(InputStream file) throws IOException, NoSuchAlgorithmException {
