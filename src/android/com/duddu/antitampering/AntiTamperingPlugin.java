@@ -1,42 +1,59 @@
 package com.duddu.antitampering;
 
 import android.app.Activity;
+import android.content.pm.ApplicationInfo;
+
 import org.apache.cordova.CallbackContext;
-import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.CordovaWebView;
 import org.apache.cordova.LOG;
 import org.apache.cordova.PluginResult;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.JSONException;
 
 public class AntiTamperingPlugin extends CordovaPlugin {
 
-    public static  final  String PLUGIN_NAME = "TamperDetection";
+    public static final String PLUGIN_NAME = "TamperDetection";
+    public static final String SHA_FINGERPRINT_PROP = "TrustedSigningSHAFingerprint";
     private Activity activity;
 
     @Override
-    public void initialize(CordovaInterface cordova, CordovaWebView webView) {
+    public void pluginInitialize() {
         activity = cordova.getActivity();
-//      checkAndStopExecution();
-        super.initialize(cordova, webView);
+
+        // Skip all checks on debuggable (local debug) builds
+        if (isDebuggableBuild()) {
+            LOG.i(PLUGIN_NAME, "Debuggable build detected. Skipping anti-tampering checks.");
+            super.pluginInitialize();
+            return;
+        }
+
+        checkAndStopExecution();
+        super.pluginInitialize();
+    }
+
+    private boolean isDebuggableBuild() {
+        try {
+            ApplicationInfo ai = activity.getApplicationInfo();
+            return (ai.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        } catch (Exception ignored) {
+            // If we can't determine it, default to not skipping
+            return false;
+        }
     }
 
     private void checkAndStopExecution() {
         try {
-            // Checking assets integrity
+            AssetsIntegrity.checkForPackageID(activity);
             AssetsIntegrity.check(activity.getAssets());
+
             DebugDetection.check(activity.getPackageName());
 
-            // Perform signing certificate check if the SHA is provided
-            String trustedSHA = preferences.getString("TrustedSigningSHAFingerprint", "");
+            String trustedSHA = preferences.getString(SHA_FINGERPRINT_PROP, "");
             if (!trustedSHA.isEmpty()) {
-                // Perform SHA check only if a trusted SHA is provided
                 SigningCertificateCheck.check(trustedSHA, activity.getPackageName(), activity.getPackageManager());
-            }
-            else {
-                // If the trusted SHA is empty, skip the check
+            } else {
                 LOG.i(PLUGIN_NAME, "Skipping signing certificate check as TRUSTED_SHA_VALUE is empty.");
             }
         } catch (final Exception e) {
@@ -58,20 +75,31 @@ public class AntiTamperingPlugin extends CordovaPlugin {
                     PluginResult result;
                     try {
                         JSONObject response = new JSONObject();
+
+                        if (isDebuggableBuild()) {
+                            response.put("skipped", true);
+                            response.put("reason", "debuggable_build");
+                            result = new PluginResult(PluginResult.Status.OK, response);
+                            callbackContext.sendPluginResult(result);
+                            return;
+                        }
+
+                        response.put("skipped", false);
+
                         AssetsIntegrity.checkForPackageID(activity);
-                        // If everything goes well, verify assets integrity
                         response.put("assets", AssetsIntegrity.check(activity.getAssets()));
 
-                        // Fetching trusted SHA from preferences
-                        String trustedSHA = preferences.getString("TrustedSigningSHAFingerprint", "");
+                        DebugDetection.check(activity.getPackageName());
 
-                        // Perform certificate check if SHA is available
+                        String trustedSHA = preferences.getString(SHA_FINGERPRINT_PROP, "");
                         if (!trustedSHA.isEmpty()) {
-                            SigningCertificateCheck.check(trustedSHA, activity.getPackageName(), activity.getPackageManager());
-                        }
-                        else {
-                            // If the trusted SHA is empty, skip the check
+                            response.put(
+                                "signingCertificateCheck",
+                                SigningCertificateCheck.check(trustedSHA, activity.getPackageName(), activity.getPackageManager())
+                            );
+                        } else {
                             LOG.i(PLUGIN_NAME, "Skipping signing certificate check as TRUSTED_SHA_VALUE is empty.");
+                            response.put("signingCertificateCheck", JSONObject.NULL);
                         }
 
                         result = new PluginResult(PluginResult.Status.OK, response);

@@ -7,21 +7,25 @@ import android.content.pm.SigningInfo;
 import android.content.pm.Signature;
 import android.os.Build;
 
-import org.apache.cordova.LOG;
+import org.json.JSONObject;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 class SigningCertificateCheck {
-    public static void check(String trustedSignature, String packageName, PackageManager packageManager) throws Exception {
+    public static JSONObject check(String trustedSignature, String packageName, PackageManager packageManager) throws Exception {
         String TRUSTED_SIGNATURE = trustedSignature.toLowerCase();
         String currentFingerprint = getCertificateFingerprint(packageName, packageManager);
-        // Show the trusted and current SHA on the device as alerts
-        LOG.d(AntiTamperingPlugin.PLUGIN_NAME, "Trusted SHA: " + TRUSTED_SIGNATURE);
-        LOG.d(AntiTamperingPlugin.PLUGIN_NAME, "Current SHA: " + currentFingerprint);
-        if (!TRUSTED_SIGNATURE.equals(currentFingerprint)) {
+
+        boolean checkForMatch = TRUSTED_SIGNATURE.equals(currentFingerprint);
+        JSONObject result = new JSONObject();
+        result.put("match", checkForMatch);
+
+        if (!checkForMatch) {
             throw new Exception("App has been re-signed or tampered with");
         }
+
+        return result;
     }
 
     @SuppressLint("ObsoleteSdkInt")
